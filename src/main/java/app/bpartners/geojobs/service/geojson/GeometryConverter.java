@@ -16,6 +16,8 @@ import java.io.StringWriter;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.BinaryOperator;
+
+import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.geotools.geojson.geom.GeometryJSON;
@@ -25,6 +27,7 @@ import org.springframework.stereotype.Component;
 
 // Most ChatGPT-generated code
 @Component
+@Getter
 @Slf4j
 public class GeometryConverter {
   private static final int DEFAULT_POLYGON_SIZE_IN_METERS = 100;
