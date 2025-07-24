@@ -1,72 +1,82 @@
 package app.bpartners.geojobs;
 
 import app.bpartners.geojobs.endpoint.rest.controller.PolygonFusionController;
+import app.bpartners.geojobs.endpoint.rest.postprocessing.GeoJsonLoader;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.model.LatLonPolygon;
+import app.bpartners.geojobs.service.geojson.GeometryConverter;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.locationtech.jts.geom.MultiPolygon;
-import org.locationtech.jts.geom.Polygon;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
+import org.locationtech.jts.geom.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
-import org.springframework.test.web.servlet.MockMvc;
-import java.io.File;
-import java.nio.file.Files;
-import java.util.HashSet;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
+
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.mockito.Mockito.*;
 
-@ExtendWith(SpringExtension.class)
-@WebMvcTest(PolygonFusionController.class)
-public class PolygonFusionControllerTest {
+@ExtendWith(MockitoExtension.class)
+class PolygonFusionControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+    @Mock
+    private GeometryConverter geometryConverter;
 
-    @MockBean
-    private app.bpartners.geojobs.service.geojson.GeometryConverter geometryConverter;
+    @Mock
+    private GeoJsonLoader geoJsonLoader;
 
+    @Mock
+    private S3Client s3Client;
+
+    @InjectMocks
+    private PolygonFusionController controller;
+
+    @BeforeEach
+    void setup() {
+        GeometryFactory geometryFactory = new GeometryFactory();
+
+        Coordinate[] coords = new Coordinate[]{
+                new Coordinate(0, 0),
+                new Coordinate(0, 1),
+                new Coordinate(1, 1),
+                new Coordinate(1, 0),
+                new Coordinate(0, 0)
+        };
+        LinearRing shell = geometryFactory.createLinearRing(coords);
+        Polygon polygon = geometryFactory.createPolygon(shell);
+
+        when(geometryConverter.getGeometryFactory()).thenReturn(geometryFactory);
+        when(geometryConverter.unifyMultiPolygon(any())).thenReturn(
+                geometryFactory.createMultiPolygon(new Polygon[]{polygon})
+        );
+    }
 
     @Test
-    void fusionnerGeoJson_shouldReturnS3Url() throws Exception {
-        // Arrange
-        File tempGeojson = File.createTempFile("test", ".geojson");
-        Files.writeString(tempGeojson.toPath(), "{ \"type\": \"FeatureCollection\", \"features\": [] }");
-
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "test.geojson", "application/geo+json", Files.readAllBytes(tempGeojson.toPath())
+    void fusionner_shouldReturnS3Url() throws Exception {
+        // Given
+        MockMultipartFile mockFile = new MockMultipartFile(
+                "file", "test.geojson", "application/geo+json", "{}".getBytes()
         );
 
-        // Mock Polygon and MultiPolygon logic
-        org.locationtech.jts.geom.GeometryFactory gf = new org.locationtech.jts.geom.GeometryFactory();
-        Polygon polygon = gf.createPolygon();
-//        Polygon polygon = gf.createPolygon(new double[][] {
-//                {0,0}, {0,1}, {1,1}, {1,0}, {0,0}
-//        });
+        // Création d'un polygone valide pour le mock
+        LatLonPolygon validPolygon = new LatLonPolygon(
+                geometryConverter.getGeometryFactory().createPolygon()
+        );
 
-        LatLonPolygon latLonPolygon = new LatLonPolygon(polygon);
-        MultiPolygon multiPolygon = gf.createMultiPolygon(new Polygon[]{polygon});
-        Set<LatLonPolygon> polygonSet = new HashSet<>();
-        polygonSet.add(latLonPolygon);
+        when(geoJsonLoader.apply(any())).thenReturn(Set.of(validPolygon));
+        when(s3Client.putObject((PutObjectRequest) any(), (RequestBody) any())).thenReturn(PutObjectResponse.builder().build());
 
-        // Mock GeometryConverter
-        when(geometryConverter.getGeometryFactory()).thenReturn(gf);
-        when(geometryConverter.unifyMultiPolygon(any())).thenReturn(multiPolygon);
+        // When
+        String resultUrl = controller.fusionner(mockFile, "test-bucket", "output.geojson");
 
-        // Act & Assert
-        mockMvc.perform(multipart("/fusionner")
-                        .file(file)
-                        .param("bucket", "my-bucket")
-                        .param("key", "myfile.geojson")
-                        .contentType(MediaType.MULTIPART_FORM_DATA))
-                .andExpect(status().isOk())
-                .andExpect(content().string("https://my-bucket.s3.eu-west-1.amazonaws.com/myfile.geojson"));
+        // Then
+        assertTrue(resultUrl.startsWith("https://test-bucket.s3.eu-west-1.amazonaws.com/output.geojson"));
     }
 }

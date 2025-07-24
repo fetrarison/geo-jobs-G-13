@@ -4,77 +4,107 @@ import app.bpartners.geojobs.endpoint.rest.postprocessing.GeoJsonLoader;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.Geojson;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.model.LatLonPolygon;
 import app.bpartners.geojobs.service.geojson.GeometryConverter;
+import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.MultiPolygon;
+import org.locationtech.jts.geom.Polygon;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
-//import software.amazon.awssdk.crt.s3.S3Client;
-import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/fusionner")
+@RequiredArgsConstructor
 public class PolygonFusionController {
-    // Injection automatique du composant
-    @Autowired
-    GeometryConverter geometryConverter;
+    private final GeometryConverter geometryConverter;
+    private final GeoJsonLoader geoJsonLoader;
+    private final S3Client s3Client;
 
-    // Point d'entrée HTTP POST pour la fusion des polygones
+    @Bean
+    public S3Client s3Client() {
+        return S3Client.builder()
+                .region(Region.EU_WEST_1)
+                .credentialsProvider(ProfileCredentialsProvider.create("nom-du-profil"))
+                .build();
+    }
+
+    @Bean
+    public GeoJsonLoader geoJsonLoader() {
+        return new GeoJsonLoader();
+    }
+
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public String fusionner(
             @RequestParam("file") MultipartFile file,
             @RequestParam("bucket") String bucket,
             @RequestParam("key") String outputKey
-    ) throws Exception {
+    ) throws IOException {
+        File inputFile = createTempFileFromMultipart(file, "input", ".geojson");
+        File outputFile = processAndMergePolygons(inputFile);
 
-        // Crée un fichier temporaire pour stocker le fichier GeoJSON reçu
-        File temp = File.createTempFile("input", ".geojson");
-        file.transferTo(temp);
+        return uploadToS3(outputFile, bucket, outputKey);
+    }
 
-        // Charge les polygones du fichier GeoJSON en tant qu'objets LatLonPolygon
-        GeoJsonLoader loader = new GeoJsonLoader();
-        Set<LatLonPolygon> polygons = loader.apply(temp);
+    private File createTempFileFromMultipart(MultipartFile file, String prefix, String suffix) throws IOException {
+        File tempFile = File.createTempFile(prefix, suffix);
+        file.transferTo(tempFile);
+        return tempFile;
+    }
 
-        // Convertit chaque polygone en MultiPolygon à l’aide du GeometryConverter
-        List<MultiPolygon> multiPolygons = polygons.stream()
-                .map(lp -> geometryConverter.getGeometryFactory().createMultiPolygon(new org.locationtech.jts.geom.Polygon[]{lp.polygon()}))
-                .toList();
+    private File processAndMergePolygons(File inputFile) throws IOException {
+        Set<LatLonPolygon> polygons = geoJsonLoader.apply(inputFile);
 
-        // Fusionne tous les MultiPolygon en un seul MultiPolygon
-        MultiPolygon merged = geometryConverter.unifyMultiPolygon(multiPolygons);
+        // Filtrage des polygones null et conversion
+        List<Polygon> validPolygons = polygons.stream()
+                .map(LatLonPolygon::polygon)
+                .filter(p -> p != null)
+                .collect(Collectors.toList());
 
-        // Transforme le MultiPolygon fusionné en un ensemble de LatLonPolygon
-        Set<LatLonPolygon> mergedPolygons = new HashSet<>();
-        for (int i = 0; i < merged.getNumGeometries(); i++) {
-            mergedPolygons.add(new LatLonPolygon((org.locationtech.jts.geom.Polygon) merged.getGeometryN(i)));
+        if (validPolygons.isEmpty()) {
+            throw new IllegalArgumentException("Aucun polygone valide trouvé dans le fichier");
         }
 
-        // Crée un objet Geojson à partir des polygones fusionnés
-        Geojson geojson = new Geojson(mergedPolygons);
-        File output = File.createTempFile("merged", ".geojson");
-        geojson.saveAsFile(output.getAbsolutePath());
+        // Conversion en tableau pour createMultiPolygon
+        Polygon[] polygonArray = validPolygons.toArray(new Polygon[0]);
+        MultiPolygon multiPolygon = geometryConverter.getGeometryFactory().createMultiPolygon(polygonArray);
+        MultiPolygon merged = geometryConverter.unifyMultiPolygon(List.of(multiPolygon));
 
-        // Initialise le client S3 (AWS SDK) pour l’upload
-        S3Client s3 = S3Client.builder().region(Region.EU_WEST_1).build();
+        Set<LatLonPolygon> mergedPolygons = new HashSet<>();
+        for (int i = 0; i < merged.getNumGeometries(); i++) {
+            mergedPolygons.add(new LatLonPolygon((Polygon) merged.getGeometryN(i)));
+        }
+
+        Geojson geojson = new Geojson(mergedPolygons);
+        File outputFile = File.createTempFile("merged", ".geojson");
+        geojson.saveAsFile(outputFile.getAbsolutePath());
+
+        return outputFile;
+    }
+
+    private String uploadToS3(File file, String bucket, String key) {
         PutObjectRequest putRequest = PutObjectRequest.builder()
                 .bucket(bucket)
-                .key(outputKey)
+                .key(key)
                 .contentType("application/geo+json")
                 .build();
-        s3.putObject(putRequest, RequestBody.fromFile(output));
 
-        // Retourne l’URL publique du fichier fusionné sur S3
-        return "https://" + bucket + ".s3.eu-west-1.amazonaws.com/" + outputKey;
+        s3Client.putObject(putRequest, RequestBody.fromFile(file));
+        return "https://" + bucket + ".s3.eu-west-1.amazonaws.com/" + key;
     }
 }
