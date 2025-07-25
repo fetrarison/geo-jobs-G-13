@@ -24,7 +24,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class PolygonFusionGeojsonController {
+class PolygonFusionGeojsonControllerTest {
 
     @Mock
     private GeometryConverter geometryConverter;
@@ -42,23 +42,22 @@ class PolygonFusionGeojsonController {
     void setup() {
         GeometryFactory geometryFactory = new GeometryFactory();
 
-        // Création des polygones basés sur votre GeoJSON réel
+        // Premier polygone (déjà correctement fermé dans votre GeoJSON)
         Coordinate[] coordsPolygon1 = new Coordinate[]{
-                new Coordinate(47.53038073939399, -18.868957314603932),
-                new Coordinate(47.53056927407374, -18.86899515765225),
-                new Coordinate(47.53083207999103, -18.869097874453942),
-                new Coordinate(47.530780661441526, -18.869173560478387),
-                new Coordinate(47.530580700418426, -18.869087062161597),
-                new Coordinate(47.53034074718906, -18.869038406839948),
-                new Coordinate(47.53036931304928, -18.868957314603932)
+                new Coordinate(47.529996793926784, -18.868702298447403),
+                new Coordinate(47.52993564766726, -18.868770678896468),
+                new Coordinate(47.53021358521195, -18.868960039995272),
+                new Coordinate(47.530324760230144, -18.868917959769476),
+                new Coordinate(47.529996793926784, -18.868702298447403) // Fermeture
         };
 
+        // Deuxième polygone (déjà correctement fermé dans votre GeoJSON)
         Coordinate[] coordsPolygon2 = new Coordinate[]{
-                new Coordinate(47.530352173533686, -18.868946502302563),
-                new Coordinate(47.530323607673495, -18.86904381298642),
-                new Coordinate(47.52994082514158, -18.8687680992348),
-                new Coordinate(47.52999224368972, -18.86869781918628),
-                new Coordinate(47.530352173533686, -18.868957314603932)
+                new Coordinate(47.53056934526961, -18.869086280608116),
+                new Coordinate(47.530586021522936, -18.869002120210567),
+                new Coordinate(47.53034699523462, -18.86894425991136),
+                new Coordinate(47.530230261465334, -18.86898108010365),
+                new Coordinate(47.53056934526961, -18.869086280608116) // Fermeture
         };
 
         LinearRing shell1 = geometryFactory.createLinearRing(coordsPolygon1);
@@ -75,55 +74,78 @@ class PolygonFusionGeojsonController {
     @Test
     void fusionner_shouldReturnS3Url() throws Exception {
         // Given
-        String geoJsonContent = "{ \"type\": \"FeatureCollection\", \"features\": [ " +
-                "{ \"type\": \"Feature\", \"properties\": {}, \"geometry\": { " +
-                "\"coordinates\": [ [ [47.53038073939399, -18.868957314603932], [47.53056927407374, -18.86899515765225], " +
-                "[47.53083207999103, -18.869097874453942], [47.530780661441526, -18.869173560478387], " +
-                "[47.530580700418426, -18.869087062161597], [47.53034074718906, -18.869038406839948], " +
-                "[47.53036931304928, -18.868957314603932] ] ], \"type\": \"Polygon\" } } }, " +
-                "{ \"type\": \"Feature\", \"properties\": {}, \"geometry\": { " +
-                "\"coordinates\": [ [ [47.530352173533686, -18.868946502302563], " +
-                "[47.530323607673495, -18.86904381298642], [47.52994082514158, -18.8687680992348], " +
-                "[47.52999224368972, -18.86869781918628], [47.530352173533686, -18.868957314603932] ] ], " +
-                "\"type\": \"Polygon\" } } } ] }";
+        String geoJsonContent = "{\n" +
+                "  \"type\": \"FeatureCollection\",\n" +
+                "  \"features\": [\n" +
+                "    {\n" +
+                "      \"type\": \"Feature\",\n" +
+                "      \"properties\": {},\n" +
+                "      \"geometry\": {\n" +
+                "        \"coordinates\": [\n" +
+                "          [\n" +
+                "            [47.529996793926784, -18.868702298447403],\n" +
+                "            [47.52993564766726, -18.868770678896468],\n" +
+                "            [47.53021358521195, -18.868960039995272],\n" +
+                "            [47.530324760230144, -18.868917959769476],\n" +
+                "            [47.529996793926784, -18.868702298447403]\n" +
+                "          ]\n" +
+                "        ],\n" +
+                "        \"type\": \"Polygon\"\n" +
+                "      }\n" +
+                "    },\n" +
+                "    {\n" +
+                "      \"type\": \"Feature\",\n" +
+                "      \"properties\": {},\n" +
+                "      \"geometry\": {\n" +
+                "        \"coordinates\": [\n" +
+                "          [\n" +
+                "            [47.53056934526961, -18.869086280608116],\n" +
+                "            [47.530586021522936, -18.869002120210567],\n" +
+                "            [47.53034699523462, -18.86894425991136],\n" +
+                "            [47.530230261465334, -18.86898108010365],\n" +
+                "            [47.53056934526961, -18.869086280608116]\n" +
+                "          ]\n" +
+                "        ],\n" +
+                "        \"type\": \"Polygon\"\n" +
+                "      }\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}";
 
         MockMultipartFile mockFile = new MockMultipartFile(
                 "file", "test.geojson", "application/geo+json", geoJsonContent.getBytes()
         );
 
-        // Création des polygones mockés correspondant au GeoJSON
+        // Création des polygones mockés correspondant exactement au GeoJSON
         GeometryFactory gf = geometryConverter.getGeometryFactory();
         LatLonPolygon polygon1 = new LatLonPolygon(gf.createPolygon(
                 gf.createLinearRing(new Coordinate[]{
-                        new Coordinate(47.53038073939399, -18.868957314603932),
-                        new Coordinate(47.53056927407374, -18.86899515765225),
-                        new Coordinate(47.53083207999103, -18.869097874453942),
-                        new Coordinate(47.530780661441526, -18.869173560478387),
-                        new Coordinate(47.530580700418426, -18.869087062161597),
-                        new Coordinate(47.53034074718906, -18.869038406839948),
-                        new Coordinate(47.53036931304928, -18.868957314603932)
+                        new Coordinate(47.529996793926784, -18.868702298447403),
+                        new Coordinate(47.52993564766726, -18.868770678896468),
+                        new Coordinate(47.53021358521195, -18.868960039995272),
+                        new Coordinate(47.530324760230144, -18.868917959769476),
+                        new Coordinate(47.529996793926784, -18.868702298447403)
                 })
-        );
+        ));
 
         LatLonPolygon polygon2 = new LatLonPolygon(gf.createPolygon(
                 gf.createLinearRing(new Coordinate[]{
-                        new Coordinate(47.530352173533686, -18.868946502302563),
-                        new Coordinate(47.530323607673495, -18.86904381298642),
-                        new Coordinate(47.52994082514158, -18.8687680992348),
-                        new Coordinate(47.52999224368972, -18.86869781918628),
-                        new Coordinate(47.530352173533686, -18.868957314603932)
+                        new Coordinate(47.53056934526961, -18.869086280608116),
+                        new Coordinate(47.530586021522936, -18.869002120210567),
+                        new Coordinate(47.53034699523462, -18.86894425991136),
+                        new Coordinate(47.530230261465334, -18.86898108010365),
+                        new Coordinate(47.53056934526961, -18.869086280608116)
                 })
-        );
+        ));
 
         when(geoJsonLoader.apply(any())).thenReturn(Set.of(polygon1, polygon2));
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
+        when(s3Client.putObject((PutObjectRequest) any(), (RequestBody) any())).thenReturn(PutObjectResponse.builder().build());
 
         // When
         String resultUrl = controller.fusionner(mockFile, "test-bucket", "output.geojson");
 
         // Then
         assertTrue(resultUrl.startsWith("https://test-bucket.s3.eu-west-1.amazonaws.com/output.geojson"));
-        verify(s3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+        verify(s3Client, times(1)).putObject((PutObjectRequest) any(), (RequestBody) any());
     }
 }
