@@ -3,8 +3,11 @@ package app.bpartners.geojobs.endpoint.rest.controller;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.GeoJsonLoader;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.Geojson;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.model.LatLonPolygon;
+import app.bpartners.geojobs.model.geometry.polygon.MultiPolygonUnion;
+import app.bpartners.geojobs.service.PolygonCloser;
 import app.bpartners.geojobs.service.geojson.GeometryConverter;
 import lombok.RequiredArgsConstructor;
+import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.MultiPolygon;
 import org.locationtech.jts.geom.Polygon;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,8 +59,9 @@ public class PolygonFusionController {
             @RequestParam("key") String outputKey
     ) throws IOException {
         File inputFile = createTempFileFromMultipart(file, "input", ".geojson");
+        System.out.println(inputFile.getTotalSpace());
         File outputFile = processAndMergePolygons(inputFile);
-
+        System.out.println(outputFile);
         return uploadToS3(outputFile, bucket, outputKey);
     }
 
@@ -80,20 +84,34 @@ public class PolygonFusionController {
             throw new IllegalArgumentException("Aucun polygone valide trouvé dans le fichier");
         }
 
-        // Conversion en tableau pour createMultiPolygon
-        Polygon[] polygonArray = validPolygons.toArray(new Polygon[0]);
-        MultiPolygon multiPolygon = geometryConverter.getGeometryFactory().createMultiPolygon(polygonArray);
-        MultiPolygon merged = geometryConverter.unifyMultiPolygon(List.of(multiPolygon));
-
-        Set<LatLonPolygon> mergedPolygons = new HashSet<>();
-        for (int i = 0; i < merged.getNumGeometries(); i++) {
-            mergedPolygons.add(new LatLonPolygon((Polygon) merged.getGeometryN(i)));
+        // Union progressive des polygones pour en faire un seul
+        MultiPolygonUnion unionOperator = new MultiPolygonUnion();
+        MultiPolygon union = geometryConverter.getGeometryFactory().createMultiPolygon(new Polygon[0]);
+        for (Polygon polygon : validPolygons) {
+            union = unionOperator.apply(union, polygon);
         }
 
+        // Si le résultat est plusieurs polygones, on force une enveloppe convexe
+        Geometry singleGeometry = union;
+        if (union.getNumGeometries() > 1) {
+            singleGeometry = union.convexHull(); // un seul polygone englobant tous
+        }
+
+        // Fermer le polygone si besoin
+        PolygonCloser closer = new PolygonCloser();
+        Polygon finalPolygon;
+        if (singleGeometry instanceof Polygon) {
+            finalPolygon = closer.apply((Polygon) singleGeometry);
+        } else {
+            // Si c'est une GeometryCollection ou autre, prendre le premier ou convertir
+            finalPolygon = closer.apply((Polygon) singleGeometry.getGeometryN(0));
+        }
+
+        Set<LatLonPolygon> mergedPolygons = Set.of(new LatLonPolygon(finalPolygon));
         Geojson geojson = new Geojson(mergedPolygons);
+
         File outputFile = File.createTempFile("merged", ".geojson");
         geojson.saveAsFile(outputFile.getAbsolutePath());
-
         return outputFile;
     }
 

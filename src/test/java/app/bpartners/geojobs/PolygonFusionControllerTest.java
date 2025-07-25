@@ -78,5 +78,8 @@ class PolygonFusionControllerTest {
 
         // Then
         assertTrue(resultUrl.startsWith("https://test-bucket.s3.eu-west-1.amazonaws.com/output.geojson"));
+
+
+
     }
 }
