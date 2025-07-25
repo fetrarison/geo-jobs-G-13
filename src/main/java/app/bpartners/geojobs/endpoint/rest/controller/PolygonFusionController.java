@@ -70,11 +70,13 @@ public class PolygonFusionController {
         file.transferTo(tempFile);
         return tempFile;
     }
+    private boolean arePolygonsClose(Polygon p1, Polygon p2, double maxDistance) {
+        return p1.distance(p2) < maxDistance;
+    }
 
     private File processAndMergePolygons(File inputFile) throws IOException {
         Set<LatLonPolygon> polygons = geoJsonLoader.apply(inputFile);
 
-        // Filtrage des polygones null et conversion
         List<Polygon> validPolygons = polygons.stream()
                 .map(LatLonPolygon::polygon)
                 .filter(p -> p != null)
@@ -84,32 +86,52 @@ public class PolygonFusionController {
             throw new IllegalArgumentException("Aucun polygone valide trouvé dans le fichier");
         }
 
-        // Union progressive des polygones pour en faire un seul
-        MultiPolygonUnion unionOperator = new MultiPolygonUnion();
-        MultiPolygon union = geometryConverter.getGeometryFactory().createMultiPolygon(new Polygon[0]);
-        for (Polygon polygon : validPolygons) {
-            union = unionOperator.apply(union, polygon);
+        // Si on a au moins 2 polygones, vérifier la proximité
+        boolean shouldMerge = false;
+        double thresholdDistance = 0.0005; // à adapter selon ton cas d'usage (~50 mètres)
+
+        if (validPolygons.size() > 1) {
+            Polygon p1 = validPolygons.get(0);
+            Polygon p2 = validPolygons.get(1);
+
+
+            shouldMerge = arePolygonsClose(p1, p2, thresholdDistance);
         }
 
-        // Si le résultat est plusieurs polygones, on force une enveloppe convexe
-        Geometry singleGeometry = union;
-        if (union.getNumGeometries() > 1) {
-            singleGeometry = union.convexHull(); // un seul polygone englobant tous
-        }
-
-        // Fermer le polygone si besoin
-        PolygonCloser closer = new PolygonCloser();
-        Polygon finalPolygon;
-        if (singleGeometry instanceof Polygon) {
-            finalPolygon = closer.apply((Polygon) singleGeometry);
+        Geometry resultGeometry;
+        if (shouldMerge) {
+            // Union progressive des polygones pour en faire un seul
+            MultiPolygonUnion unionOperator = new MultiPolygonUnion();
+            MultiPolygon union = geometryConverter.getGeometryFactory().createMultiPolygon(new Polygon[0]);
+            for (Polygon polygon : validPolygons) {
+                union = unionOperator.apply(union, polygon);
+            }
+            // Si le résultat est plusieurs polygones, on force une enveloppe convexe
+            resultGeometry = union;
+            if (union.getNumGeometries() > 1) {
+                resultGeometry = union.convexHull(); // un seul polygone englobant tous
+            }
         } else {
-            // Si c'est une GeometryCollection ou autre, prendre le premier ou convertir
-            finalPolygon = closer.apply((Polygon) singleGeometry.getGeometryN(0));
+            // Crée un MultiPolygon sans fusion
+            resultGeometry = geometryConverter.getGeometryFactory().createMultiPolygon(
+                    validPolygons.toArray(new Polygon[0])
+            );
         }
 
-        Set<LatLonPolygon> mergedPolygons = Set.of(new LatLonPolygon(finalPolygon));
-        Geojson geojson = new Geojson(mergedPolygons);
+        // Fermer les polygones si besoin (pour chaque polygone du MultiPolygon)
+        Set<LatLonPolygon> mergedPolygons = new HashSet<>();
+        if (resultGeometry instanceof MultiPolygon) {
+            for (int i = 0; i < resultGeometry.getNumGeometries(); i++) {
+                Polygon poly = (Polygon) resultGeometry.getGeometryN(i);
+                PolygonCloser closer = new PolygonCloser();
+                mergedPolygons.add(new LatLonPolygon(closer.apply(poly)));
+            }
+        } else if (resultGeometry instanceof Polygon) {
+            PolygonCloser closer = new PolygonCloser();
+            mergedPolygons.add(new LatLonPolygon(closer.apply((Polygon) resultGeometry)));
+        }
 
+        Geojson geojson = new Geojson(mergedPolygons);
         File outputFile = File.createTempFile("merged", ".geojson");
         geojson.saveAsFile(outputFile.getAbsolutePath());
         return outputFile;

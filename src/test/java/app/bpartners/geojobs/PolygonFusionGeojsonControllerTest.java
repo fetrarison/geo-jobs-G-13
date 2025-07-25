@@ -47,23 +47,24 @@ class PolygonFusionGeojsonControllerTest {
     void setup() {
         GeometryFactory geometryFactory = new GeometryFactory();
 
-        // Premier polygone
+        // Premier polygone inversé (longitude, latitude)
         Coordinate[] coordsPolygon1 = new Coordinate[]{
-                new Coordinate(47.529996793926784, -18.868702298447403),
-                new Coordinate(47.52993564766726, -18.868770678896468),
-                new Coordinate(47.53021358521195, -18.868960039995272),
-                new Coordinate(47.530324760230144, -18.868917959769476),
-                new Coordinate(47.529996793926784, -18.868702298447403)
+                new Coordinate(-18.868702298447403, 47.529996793926784),
+                new Coordinate(-18.868770678896468, 47.52993564766726),
+                new Coordinate(-18.868960039995272, 47.53021358521195),
+                new Coordinate(-18.868917959769476, 47.530324760230144),
+                new Coordinate(-18.868702298447403, 47.529996793926784)
         };
 
-        // Deuxième polygone
+// Deuxième polygone inversé (longitude, latitude)
         Coordinate[] coordsPolygon2 = new Coordinate[]{
-                new Coordinate(47.53056934526961, -18.869086280608116),
-                new Coordinate(47.530586021522936, -18.869002120210567),
-                new Coordinate(47.53034699523462, -18.86894425991136),
-                new Coordinate(47.530230261465334, -18.86898108010365),
-                new Coordinate(47.53056934526961, -18.869086280608116)
+                new Coordinate(-18.869086280608116, 47.53056934526961),
+                new Coordinate(-18.869002120210567, 47.530586021522936),
+                new Coordinate(-18.86894425991136, 47.53034699523462),
+                new Coordinate(-18.86898108010365, 47.530230261465334),
+                new Coordinate(-18.869086280608116, 47.53056934526961)
         };
+
 
         LinearRing shell1 = geometryFactory.createLinearRing(coordsPolygon1);
         LinearRing shell2 = geometryFactory.createLinearRing(coordsPolygon2);
