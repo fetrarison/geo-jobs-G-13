@@ -42,50 +42,61 @@ class PolygonFusionGeojsonControllerTest {
 
     private LatLonPolygon polygon1;
     private LatLonPolygon polygon2;
+    private LatLonPolygon polygon3;
 
     @BeforeEach
     void setup() {
         GeometryFactory geometryFactory = new GeometryFactory();
 
-        // Premier polygone inversé (longitude, latitude)
+        // Premier polygone (longitude, latitude)
         Coordinate[] coordsPolygon1 = new Coordinate[]{
-                new Coordinate(-18.868702298447403, 47.529996793926784),
-                new Coordinate(-18.868770678896468, 47.52993564766726),
-                new Coordinate(-18.868960039995272, 47.53021358521195),
-                new Coordinate(-18.868917959769476, 47.530324760230144),
-                new Coordinate(-18.868702298447403, 47.529996793926784)
+                new Coordinate(-18.868688538710018, 47.529830827354346),
+                new Coordinate(-18.86900097674885, 47.53030468623015),
+                new Coordinate(-18.868974831329226, 47.53037238035549),
+                new Coordinate(-18.868640169589625, 47.52988332484),
+                new Coordinate(-18.868688538710018, 47.529830827354346)
         };
 
-// Deuxième polygone inversé (longitude, latitude)
+        // Deuxième polygone (longitude, latitude)
         Coordinate[] coordsPolygon2 = new Coordinate[]{
-                new Coordinate(-18.869086280608116, 47.53056934526961),
-                new Coordinate(-18.869002120210567, 47.530586021522936),
-                new Coordinate(-18.86894425991136, 47.53034699523462),
-                new Coordinate(-18.86898108010365, 47.530230261465334),
-                new Coordinate(-18.869086280608116, 47.53056934526961)
+                new Coordinate(-18.869009077689554, 47.53031617190939),
+                new Coordinate(-18.86908468091825, 47.530611063990364),
+                new Coordinate(-18.869020074525096, 47.53061832734147),
+                new Coordinate(-18.868981585598632, 47.53037863673299),
+                new Coordinate(-18.869009077689554, 47.53031617190939)
         };
 
+        // Troisième polygone (longitude, latitude)
+        Coordinate[] coordsPolygon3 = new Coordinate[]{
+                new Coordinate(-18.869085524701575, 47.530623423674996),
+                new Coordinate(-18.86933525550161, 47.5311049981772),
+                new Coordinate(-18.869278615558898, 47.5311322057772),
+                new Coordinate(-18.86903145922186, 47.53063158595464),
+                new Coordinate(-18.869085524701575, 47.530623423674996)
+        };
 
         LinearRing shell1 = geometryFactory.createLinearRing(coordsPolygon1);
         LinearRing shell2 = geometryFactory.createLinearRing(coordsPolygon2);
+        LinearRing shell3 = geometryFactory.createLinearRing(coordsPolygon3);
+
         Polygon poly1 = geometryFactory.createPolygon(shell1);
         Polygon poly2 = geometryFactory.createPolygon(shell2);
+        Polygon poly3 = geometryFactory.createPolygon(shell3);
 
         polygon1 = new LatLonPolygon(poly1);
         polygon2 = new LatLonPolygon(poly2);
+        polygon3 = new LatLonPolygon(poly3);
 
         when(geometryConverter.getGeometryFactory()).thenReturn(geometryFactory);
     }
 
     @Test
     void fusionner_shouldReturnS3UrlAndPrintCombinedGeoJson() throws Exception {
-        // Given
         String geoJsonContent = "{\n" +
                 "  \"type\": \"FeatureCollection\",\n" +
-                "  \"features\": [ ... ]\n" + // Pour le test, le contenu exact n'a pas d'importance ici
+                "  \"features\": [ ... ]\n" +
                 "}";
 
-        // On crée un vrai fichier temporaire simulant l'upload
         File tempInputFile = File.createTempFile("test", ".geojson");
         try (FileOutputStream fos = new FileOutputStream(tempInputFile)) {
             fos.write(geoJsonContent.getBytes());
@@ -95,19 +106,16 @@ class PolygonFusionGeojsonControllerTest {
                 "file", "test.geojson", "application/geo+json", geoJsonContent.getBytes()
         );
 
-        // Mock pour GeoJsonLoader : il doit renvoyer les polygones à partir d'un fichier
-        when(geoJsonLoader.apply(any(File.class))).thenReturn(Set.of(polygon1, polygon2));
+        // Mock retourne les 3 polygones
+        when(geoJsonLoader.apply(any(File.class))).thenReturn(Set.of(polygon1, polygon2, polygon3));
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());
 
-        // When
         String resultUrl = controller.fusionner(mockFile, "test-bucket", "output.geojson");
 
-        // Then
         assertTrue(resultUrl.startsWith("https://test-bucket.s3.eu-west-1.amazonaws.com/output.geojson"));
         verify(s3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
 
-        // BONUS : Affichage du GeoJSON combiné
         System.out.println("\n=== GEOJSON COMBINÉ ===");
         System.out.println("Vérifiez le contenu du fichier de sortie généré.");
         System.out.println("======================\n");
