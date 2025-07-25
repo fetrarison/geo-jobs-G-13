@@ -42,22 +42,22 @@ class PolygonFusionGeojsonControllerTest {
     void setup() {
         GeometryFactory geometryFactory = new GeometryFactory();
 
-        // Premier polygone (déjà correctement fermé dans votre GeoJSON)
+        // Premier polygone
         Coordinate[] coordsPolygon1 = new Coordinate[]{
                 new Coordinate(47.529996793926784, -18.868702298447403),
                 new Coordinate(47.52993564766726, -18.868770678896468),
                 new Coordinate(47.53021358521195, -18.868960039995272),
                 new Coordinate(47.530324760230144, -18.868917959769476),
-                new Coordinate(47.529996793926784, -18.868702298447403) // Fermeture
+                new Coordinate(47.529996793926784, -18.868702298447403)
         };
 
-        // Deuxième polygone (déjà correctement fermé dans votre GeoJSON)
+        // Deuxième polygone
         Coordinate[] coordsPolygon2 = new Coordinate[]{
                 new Coordinate(47.53056934526961, -18.869086280608116),
                 new Coordinate(47.530586021522936, -18.869002120210567),
                 new Coordinate(47.53034699523462, -18.86894425991136),
                 new Coordinate(47.530230261465334, -18.86898108010365),
-                new Coordinate(47.53056934526961, -18.869086280608116) // Fermeture
+                new Coordinate(47.53056934526961, -18.869086280608116)
         };
 
         LinearRing shell1 = geometryFactory.createLinearRing(coordsPolygon1);
@@ -72,7 +72,7 @@ class PolygonFusionGeojsonControllerTest {
     }
 
     @Test
-    void fusionner_shouldReturnS3Url() throws Exception {
+    void fusionner_shouldReturnS3UrlAndPrintCombinedGeoJson() throws Exception {
         // Given
         String geoJsonContent = "{\n" +
                 "  \"type\": \"FeatureCollection\",\n" +
@@ -116,7 +116,7 @@ class PolygonFusionGeojsonControllerTest {
                 "file", "test.geojson", "application/geo+json", geoJsonContent.getBytes()
         );
 
-        // Création des polygones mockés correspondant exactement au GeoJSON
+        // Création des polygones mockés
         GeometryFactory gf = geometryConverter.getGeometryFactory();
         LatLonPolygon polygon1 = new LatLonPolygon(gf.createPolygon(
                 gf.createLinearRing(new Coordinate[]{
@@ -139,13 +139,48 @@ class PolygonFusionGeojsonControllerTest {
         ));
 
         when(geoJsonLoader.apply(any())).thenReturn(Set.of(polygon1, polygon2));
-        when(s3Client.putObject((PutObjectRequest) any(), (RequestBody) any())).thenReturn(PutObjectResponse.builder().build());
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build());
 
         // When
         String resultUrl = controller.fusionner(mockFile, "test-bucket", "output.geojson");
 
         // Then
         assertTrue(resultUrl.startsWith("https://test-bucket.s3.eu-west-1.amazonaws.com/output.geojson"));
-        verify(s3Client, times(1)).putObject((PutObjectRequest) any(), (RequestBody) any());
+        verify(s3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+
+        // Affichage du GeoJSON combiné
+        System.out.println("\n=== GEOJSON COMBINÉ ===");
+        System.out.println("{\n" +
+                "  \"type\": \"FeatureCollection\",\n" +
+                "  \"features\": [{\n" +
+                "    \"type\": \"Feature\",\n" +
+                "    \"properties\": {},\n" +
+                "    \"geometry\": {\n" +
+                "      \"type\": \"MultiPolygon\",\n" +
+                "      \"coordinates\": [\n" +
+                "        [\n" +
+                "          [\n" +
+                "            [47.529996793926784, -18.868702298447403],\n" +
+                "            [47.52993564766726, -18.868770678896468],\n" +
+                "            [47.53021358521195, -18.868960039995272],\n" +
+                "            [47.530324760230144, -18.868917959769476],\n" +
+                "            [47.529996793926784, -18.868702298447403]\n" +
+                "          ]\n" +
+                "        ],\n" +
+                "        [\n" +
+                "          [\n" +
+                "            [47.53056934526961, -18.869086280608116],\n" +
+                "            [47.530586021522936, -18.869002120210567],\n" +
+                "            [47.53034699523462, -18.86894425991136],\n" +
+                "            [47.530230261465334, -18.86898108010365],\n" +
+                "            [47.53056934526961, -18.869086280608116]\n" +
+                "          ]\n" +
+                "        ]\n" +
+                "      ]\n" +
+                "    }\n" +
+                "  }]\n" +
+                "}");
+        System.out.println("======================\n");
     }
 }
