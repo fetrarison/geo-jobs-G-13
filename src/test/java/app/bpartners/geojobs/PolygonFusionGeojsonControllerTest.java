@@ -3,6 +3,7 @@ package app.bpartners.geojobs;
 import app.bpartners.geojobs.endpoint.rest.controller.PolygonFusionController;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.GeoJsonLoader;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.model.LatLonPolygon;
+import app.bpartners.geojobs.service.PolygonContinue.PolygonContinueService;
 import app.bpartners.geojobs.service.geojson.GeometryConverter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,9 @@ class PolygonFusionGeojsonControllerTest {
 
     @InjectMocks
     private PolygonFusionController controller;
+
+    @InjectMocks
+    private PolygonContinueService service;
 
     private LatLonPolygon polygon1;
     private LatLonPolygon polygon2;
@@ -111,7 +115,7 @@ class PolygonFusionGeojsonControllerTest {
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());
 
-        String resultUrl = controller.fusionner(mockFile, "test-bucket", "output.geojson");
+        String resultUrl = controller.fusionner(mockFile, "test-bucket", "output.geojson", service);
 
         assertTrue(resultUrl.startsWith("https://test-bucket.s3.eu-west-1.amazonaws.com/output.geojson"));
         verify(s3Client, times(1)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
