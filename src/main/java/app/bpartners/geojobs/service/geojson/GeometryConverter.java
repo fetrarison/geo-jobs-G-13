@@ -235,7 +235,13 @@ public class GeometryConverter {
     Polygon polygon = geometryFactory.createPolygon(shell);
 
     if (!polygon.isValid()) {
-      polygon = (Polygon) GeometryFixer.fix(polygon); // ou polygon.buffer(0)
+      var fixGeometry = GeometryFixer.fix(polygon);
+      log.info("Fixed polygon : {}", writeGeometryAsString(fixGeometry));
+      if (fixGeometry instanceof Polygon) {
+        polygon = (Polygon) fixGeometry; // ou polygon.buffer(0)
+      } else if (fixGeometry instanceof MultiPolygon) {
+        polygon = (Polygon) fixGeometry.getGeometryN(0);
+      }
     }
 
     return polygon;
