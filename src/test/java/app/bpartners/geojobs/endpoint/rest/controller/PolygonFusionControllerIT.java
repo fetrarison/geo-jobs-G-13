@@ -1,6 +1,6 @@
-package app.bpartners.geojobs;
+package app.bpartners.geojobs.endpoint.rest.controller;
 
-import app.bpartners.geojobs.endpoint.rest.controller.PolygonFusionController;
+import app.bpartners.geojobs.conf.FacadeIT;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.GeoJsonLoader;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.model.LatLonPolygon;
 import app.bpartners.geojobs.service.PolygonContinue.PolygonContinueService;
@@ -27,7 +27,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class PolygonFusionGeojsonControllerTest {
+class PolygonFusionControllerIT {
 
     @Mock
     private GeometryConverter geometryConverter;
