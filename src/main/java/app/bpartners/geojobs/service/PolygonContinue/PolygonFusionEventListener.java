@@ -1,7 +1,6 @@
 package app.bpartners.geojobs.service.PolygonContinue;
 
 import app.bpartners.geojobs.entity.PolygonFusionRequestedEvent;
-import app.bpartners.geojobs.service.PolygonContinueService;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;

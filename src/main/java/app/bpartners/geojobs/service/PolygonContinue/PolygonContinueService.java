@@ -1,4 +1,4 @@
-package app.bpartners.geojobs.service;
+package app.bpartners.geojobs.service.PolygonContinue;
 
 import app.bpartners.geojobs.endpoint.rest.postprocessing.GeoJsonLoader;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.Geojson;

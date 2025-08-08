@@ -2,7 +2,7 @@ package app.bpartners.geojobs.endpoint.rest.controller;
 
 import java.util.Map;
 
-import app.bpartners.geojobs.service.PolygonContinueService;
+import app.bpartners.geojobs.service.PolygonContinue.PolygonContinueService;
 import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
 import org.springframework.web.bind.annotation.PostMapping;

@@ -4,7 +4,7 @@ import app.bpartners.geojobs.conf.FacadeIT;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.GeoJsonLoader;
 import app.bpartners.geojobs.file.bucket.BucketComponent;
 import app.bpartners.geojobs.file.hash.FileHash;
-import app.bpartners.geojobs.service.PolygonContinueService;
+import app.bpartners.geojobs.service.PolygonContinue.PolygonContinueService;
 import app.bpartners.geojobs.service.geojson.GeometryConverter;
 import app.bpartners.geojobs.service.gouv.fr.rnb.BuildingApi;
 import org.junit.jupiter.api.Test;
