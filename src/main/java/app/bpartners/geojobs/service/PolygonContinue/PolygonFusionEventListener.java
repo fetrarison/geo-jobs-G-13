@@ -1,6 +1,7 @@
 package app.bpartners.geojobs.service.PolygonContinue;
 
 import app.bpartners.geojobs.entity.PolygonFusionRequestedEvent;
+import app.bpartners.geojobs.service.PolygonContinueService;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
@@ -22,9 +23,7 @@ public class PolygonFusionEventListener {
     public void handleFusionEvent(PolygonFusionRequestedEvent event) throws IOException {
         // Utilisation de la réflexion pour invoquer la méthode (exemple)
         Method method = PolygonContinueService.class.getMethod("processAndMergePolygons", File.class);
-        File inputFile = service.createTempFileFromMultipart(event.getFile(), "input", ".geojson");
-        File outputFile = (File) method.invoke(service, inputFile);
-        service.uploadToS3(outputFile, event.getBucket(), event.getOutputKey());
+        service.fusionnerPolygones(event.getFile(), event.getBucket(), event.getOutputKey());
         // Vous pouvez aussi publier un nouvel événement: PolygonFusionCompletedEvent
     }
 }
