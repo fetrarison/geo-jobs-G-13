@@ -3,6 +3,8 @@ package app.bpartners.geojobs.service.PolygonContinue;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.GeoJsonLoader;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.Geojson;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.model.LatLonPolygon;
+import app.bpartners.geojobs.entity.async.PolygonFusionEvent;
+import app.bpartners.geojobs.entity.async.PolygonFusionEventProducer;
 import app.bpartners.geojobs.file.bucket.BucketComponent;
 import app.bpartners.geojobs.model.geometry.polygon.MultiPolygonUnion;
 import app.bpartners.geojobs.service.geojson.GeometryConverter;
@@ -10,15 +12,19 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.MultiPolygon;
 import org.locationtech.jts.geom.Polygon;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+@EnableAsync
 @Service
 @AllArgsConstructor
 @Slf4j
@@ -27,10 +33,25 @@ public class PolygonContinueService {
     private final GeometryConverter geometryConverter;
     private final GeoJsonLoader geoJsonLoader;
     private final BucketComponent bucketComponent;
+    private final PolygonFusionEventProducer polygonFusionEventProducer;
 
     /**
-     * Point d'entrée pour fusionner et uploader les polygones.
-     * Retourne une map avec l'URL S3 et le chemin local du fichier fusionné.
+     * Point d'entree asynchrone pour la fusion des polygones. Publie un PolygonFusionEvent a la fin.
+     * Retourne un CompletableFuture contenant le resultat.
+     */
+    @Async
+    public CompletableFuture<Map<String, String>> fusionnerPolygonesAsync(
+            MultipartFile file, String bucket, String key
+    ) throws IOException {
+        Map<String, String> result = fusionnerPolygones(file, bucket, key);
+        // Publier un événement ici (voir étape 2)
+        polygonFusionEventProducer.publish(new PolygonFusionEvent(result));
+        return CompletableFuture.completedFuture(result);
+    }
+
+    /**
+     * Point d'entree pour fusionner et uploader les polygones.
+     * Retourne une map avec l'URL S3 et le chemin local du fichier fusionne.
      */
     public Map<String, String> fusionnerPolygones(MultipartFile file, String bucket, String key)
             throws IOException {
@@ -76,7 +97,7 @@ public class PolygonContinueService {
     }
 
     /**
-     * Détermine si les polygones doivent être fusionnés et retourne la géométrie finale.
+     * Determine si les polygones doivent etre fusionnes et retourne la geometrie finale.
      */
     private Geometry mergePolygonsIfNeeded(List<Polygon> validPolygons) {
         boolean shouldMerge = shouldMergePolygons(validPolygons);
@@ -90,7 +111,7 @@ public class PolygonContinueService {
     }
 
     /**
-     * Vérifie si les polygones sont proches pour être fusionnés.
+     * Verifie si les polygones sont proches pour être fusionnes.
      */
     private boolean shouldMergePolygons(List<Polygon> polygons) {
         if (polygons.size() <= 1) return false;
@@ -99,7 +120,7 @@ public class PolygonContinueService {
     }
 
     /**
-     * Fusionne plusieurs polygones en un seul (avec enveloppe convexe si nécessaire).
+     * Fusionne plusieurs polygones en un seul (avec enveloppe convexe si necessaire).
      */
     private Geometry mergePolygons(List<Polygon> polygons) {
         MultiPolygonUnion unionOperator = new MultiPolygonUnion();
@@ -113,7 +134,7 @@ public class PolygonContinueService {
     }
 
     /**
-     * Sauvegarde la géométrie fusionnée au format GeoJSON dans un fichier temporaire.
+     * Sauvegarde la geometrie fusionnee au format GeoJSON dans un fichier temporaire.
      */
     private File saveGeometryAsGeoJson(Geometry geometry) throws IOException {
         Set<LatLonPolygon> mergedPolygons = new HashSet<>();
@@ -133,7 +154,7 @@ public class PolygonContinueService {
     }
 
     /**
-     * Upload le fichier vers S3 et retourne l'URL présignée.
+     * Upload le fichier vers S3 et retourne l'URL presignee.
      */
     private Map<String, String> uploadAndGetUrl(File file, String bucket, String key) {
         bucketComponent.upload(file, key);

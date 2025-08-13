@@ -2,6 +2,7 @@ package app.bpartners.geojobs.endpoint.rest.controller;
 
 import app.bpartners.geojobs.conf.FacadeIT;
 import app.bpartners.geojobs.endpoint.rest.postprocessing.GeoJsonLoader;
+import app.bpartners.geojobs.entity.async.PolygonFusionEventProducer;
 import app.bpartners.geojobs.file.bucket.BucketComponent;
 import app.bpartners.geojobs.file.hash.FileHash;
 import app.bpartners.geojobs.service.PolygonContinue.PolygonContinueService;
@@ -10,6 +11,7 @@ import app.bpartners.geojobs.service.gouv.fr.rnb.BuildingApi;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.mock.web.MockMultipartFile;
 
@@ -48,11 +50,19 @@ public class PolygonFusionMultiControllerIT extends FacadeIT {
                 return "file://" + bucketKey;
             }
         };
+        ApplicationEventPublisher eventPublisher = new ApplicationEventPublisher() {
+            @Override
+            public void publishEvent(Object event) {
+                // Tu peux laisser vide pour le test
+            }
+        };
+        PolygonFusionEventProducer polygonFusionEventProducer = new PolygonFusionEventProducer(eventPublisher);
 
         PolygonContinueService service = new PolygonContinueService(
                 geometryConverter,
                 geoJsonLoader,
-                bucketComponent
+                bucketComponent,
+                polygonFusionEventProducer
         );
 
         Map<String, String> result = service.fusionnerPolygones(
